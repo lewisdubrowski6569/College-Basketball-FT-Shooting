@@ -68,8 +68,9 @@ out <- rbindlist(out, fill = TRUE) #combine all the games into one data.table
 out <- unique(out) #filter out duplicates so we don't count some games twice
 
 #code to write this data.table to an fst file to save me time later
+
 # setwd("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness")
-# write.fst(out, "All PbP Stats", compress = 100)
+# write.fst(out, "All_PbP_Stats.fst", compress = 100)
 
 #since we're only looking at analyzing free throws, we can filter the large play by play data.table
 #to only the plays that involve free throws
@@ -108,7 +109,7 @@ freethrows$shot_team[freethrows$shot_team == 'UMass'] <- 'Massachusetts'
 freethrows$shot_team[freethrows$shot_team == 'McNeese'] <- 'Mcneese St'
 freethrows$shot_team[grep(" St. Mary's", freethrows$shot_team)] <- "Mt. St. Mary'S"
 freethrows$shot_team[freethrows$shot_team == 'Presbyterian'] <- 'Presbyterian College'
-freethrows$shot_team[grep('San Jos', freethrows$shot_team)] <- 'San José State'
+freethrows$shot_team[grep('San Jos', freethrows$shot_team)] <- 'San JosÃ© State'
 freethrows$shot_team[freethrows$shot_team == 'UConn'] <- 'Connecticut'
 freethrows$shot_team[freethrows$shot_team == 'UL Monroe'] <- 'Ul Monroe'
 freethrows$shot_team[freethrows$shot_team == 'UTSA'] <- 'UT San Antonio'
@@ -205,6 +206,7 @@ playersCombo <- left_join(players, rosters, by = c('shooter' = 'name',
 #which includes conference information
 
 #I downloaded csv files directly from barttorvik.com so I can load the data into R
+#information for how to download these files can be found here: http://adamcwisports.blogspot.com/p/data.html
 trankFiles <- sprintf('%s_team_results', 2018:2022)
 
 teamStats <- foreach(i = trankFiles,
@@ -409,7 +411,7 @@ freethrows <- freethrows %>% left_join(playersCombo[,c(1,2,11,12)], by = c('seas
   rename(shooter = shooter.x,
          adjShooter = shooter.y)
 
-# write.fst(freethrows, "All FTs", compress = 100)
+# write.fst(freethrows, "All_FTs.fst", compress = 100)
 
 #the remaining code prints out tables based on the player-season data
 #these tables give some interesting info about the average FT% based on position, class, etc.
@@ -460,7 +462,7 @@ playersCombo %>% group_by(conf) %>%
 #add a column for whether the conference is a "power conference" or not
 playersCombo$power <- ifelse(playersCombo$conf %in% c('ACC', 'P12', 'SEC', 'B10', 'B12', 'BE'), 'Power', 'Non-Power')
 
-# write.fst(playersCombo, "Player FT Seasons", compress = 100)
+# write.fst(playersCombo, "PlayerSeasons.fst", compress = 100)
 
 #Are power conferences better or worse at FT%?
 playersCombo %>% group_by(power) %>%

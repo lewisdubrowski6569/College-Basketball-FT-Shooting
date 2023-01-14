@@ -1,0 +1,423 @@
+---
+title: "How Many Free Throws Does It Take to Get to the Center of a Player's Skill Level?"
+author: "Lewis Dubrowski"
+date: "`r Sys.Date()`"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r, warning= FALSE, message = FALSE}
+
+#load in necessary packages
+library(ncaahoopR)
+library(data.table)
+library(tidyr)
+library(knitr)
+library(kableExtra)
+library(scales)
+library(fst)
+library(ltm)
+library(plotly)
+library(ggplot2)
+library(ggthemes)
+library(stringi)
+`%!in%` <- Negate(`%in%`)
+
+#the code to read in and clean all the data took a very long time to run, so it is
+#included in a separate file (Free Throw Shooting.R) on github
+#the file being loaded in below is the resulting cleaned dataset
+
+#unfortunately, the combined free throws dataset is too large for github
+#instead, I put the individual game csv files on github
+#again, those files are combined in Free Throw Shooting.R and result in the file being loaded below
+freethrows <- read.fst("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness/All FTs")
+
+```
+
+
+## Introduction
+
+Oral Roberts's memorable run to the Sweet 16 of the 2021 NCAA Men's Basketball Tournament marked [just the second time a 15-seed made the second weekend of the tournament](https://dknation.draftkings.com/2022/3/19/22987169/how-many-15-seeds-have-made-sweet-16-march-madness-ncaa-tournament-history "https://dknation.draftkings.com/2022/3/19/22987169/how-many-15-seeds-have-made-sweet-16-march-madness-ncaa-tournament-history") (that is, before Saint Peter's made it to the Elite 8 the following year). Led by [the national leader in points per game](https://www.sports-reference.com/cbb/seasons/2021-leaders.html "Sports Reference Men's CBB 2020-21 Leaders"), second year guard Max Ambas, the team upset 2-seed Ohio State and 7-seed Florida, before losing to 3-seed Arkansas in the regional semifinals. Each game was decided by one possession. Winning close games requires plenty of luck, but certain skills help teams succeed in tight spots. Every point matters in close matchups, especially points from the free throw (FT) line. FT shooting plays a critical role late in games as losing teams intentionally foul opposing players to prolong their chances of coming back. Good FT shooters help a winning team prevent a comeback, or help a losing team chip away at a deficit. At 82%, Oral Roberts led the nation in FT percentage in 2021. Their success at the line was pivotal in the Tournament: Across their three games, Oral Roberts outscored their opponents 43-29 on FTs, while shooting 80% (all stats courtesy of [https://barttorvik.com](https://barttorvik.com)).
+
+Each player has a different level of skill in shooting FTs. All else being equal, a team wants its best FT shooters on the court late in close games. How could we rank the "best" FT shooters on a team? We could simply rank players based on their free throw percentage (FT%). The best FT shooters should have a higher FT% than the worst FT shooters. Unfortunately, FT% is not a perfect representation of a player's skill level. A player who goes 2-for-2 from the FT line has a FT% of 100%, but they probably are not a perfect FT shooter. If a player shoots 200-for-200, however, then we might feel more confident in calling them the greatest FT shooter ever. The more FTs a player attempts, the more likely it is that their FT% represents their actual skill. Therefore, any ranking of players' FT shooting skill must account for the number of FTs they have attempted.
+
+With this in mind, I set out to answer the following questions:
+
+1. Given a certain number of attempts, how confident can we be that a player's FT% represents their true skill level?
+
+2. After accounting for a player's number of FT attempts, what is their "true talent" for shooting FTs?
+
+## Data
+
+To start with, I took all Division I play-by-play data from the last five men's college basketball seasons (2017-18 through 2021-22) from the [`ncaahoopR` package data repository](https://github.com/lbenz730/ncaahoopR_data "ncaahoopR data repository"), which contains ESPN play-by-play data dating back to 2002-03. I then calculated FT shooting statistics for each individual player-season. Using individual player-seasons is preferable to combining a player's FT statistics over their entire collegiate career, because a player's skill might change from season to season. I also obtained data on the conference in which each player played, their position (Guard, Forward, Forward/Center, and Center), and their class (Freshman, Sophomore, Junior, Senior). Conference, position, and class data came from the [ `ncaahoopR` package](https://github.com/lbenz730/ncaahoopR "ncaahoopR package") and [barttorvik.com](https://barttorvik.com). Over the five-year sample, I considered 21,206 individual player-seasons.
+```{r, warning= FALSE, message = FALSE}
+
+#as with the 'freethrows' dataset, the file below is the resulting cleaned dataset
+#from running Free Throw Shooting.R
+#this file is small enough for github, so it is included as a CSV file for reference
+playerSeasons <- read.fst("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness/Player FT Seasons")
+
+```
+
+## Methodology
+
+Using the data above, I determined the relationship between a player's actual FT% and their true talent for shooting FTs. To do this, I took random samples of a given number of FTs from each player-season, starting with a sample size of 2 and ending with a sample size of 200 (larger sample sizes left too few qualifying player-seasons for accurate analysis). For a sample size of 100 FTs, for example, I randomly selected 100 FTs from each player-season that had at least 100 attempts. I then calculated the Cronbach's alpha value for each sample size. Cronbach's alpha is a number between 0 and 1 which tells us how much of the observed variation in a statistic is predictive and how much is random. In this case, calculating Cronbach's alpha will tell us how reliably a player's FT% demonstrates their skill. An alpha close to 1 means a player's FT% tells us a lot about how good that player is at shooting FTs. An alpha close to 0 means we cannot say much about a player's skill based solely on their FT%. Much of the analysis in this report is based on similar analysis contained in the following [FanGraphs article](https://blogs.fangraphs.com/a-new-way-to-look-at-sample-size-math-supplement/ "A New Way to Look at Sample Size: Math Supplement"), which contains a more detailed description of Cronbach's alpha and its use in determining the reliability of a statistic. Since a larger number of FT attempts tells us more about a player's skill, we should expect the alpha value to increase as we take larger samples of FTs.
+
+```{r, warning= FALSE, message = FALSE}
+
+#make a sequence containing the different sample sizes we will test
+#all numbers of attempts from 2 to 200
+numFTs <- seq(2, 200)
+
+#the following function takes a sample size as a parameter and outputs the alpha value
+#for that sample size
+alphaCalc <- function(ss){
+
+  #set the seed to ensure consistent results
+  set.seed(1234)
+
+  #only select player-seasons that have enough FTs to take a sample of size ss
+  playerThreshold <- playerSeasons %>% filter(FTs >= ss)
+
+  #join freethrows and playerThreshold
+  freethrowsThreshold <- freethrows %>% inner_join(playerThreshold, by = c('playerCode',
+                                                                          'season',
+                                                                          'shot_team'))
+
+  #select a sample of size ss of free throws by each player-season
+  selectSample <- freethrowsThreshold %>% group_by(playerCode, season, shot_team) %>%
+    slice_sample(n = ss, replace = FALSE) %>% 
+    mutate(playerFT = row_number(),
+           FTM = ifelse(shot_outcome == 'made', 1, 0)) %>%
+    dplyr::select(playerCode, season, shot_team, playerFT, FTM)
+  
+  #combine the data into a data table where each row is a player season
+  #and each column contains zeros and ones corresponding to whether a player
+  #made (1) or missed (0) each FT (there are ss columns, one for each FT in the sample)
+  selectSampleDT <- dcast(setDT(selectSample), playerCode + season + shot_team ~
+                            playerFT, value.var = 'FTM')
+  
+  #return the alpha value
+  return(cronbach.alpha(selectSampleDT[,4:(ss + 3)])$alpha)
+  
+}
+
+#combine the alpha values for each sample size into one list of alphas
+alphas <- lapply(numFTs, alphaCalc)
+
+```
+
+```{r, warning= FALSE, message = FALSE, out.width="60%", out.height="60%", fig.align = 'center'}
+
+#combine the sample sizes and alpha values into one dataframe so we can plot the results
+FT_alphas <- do.call(rbind, Map(data.frame, sampleSize = numFTs, FTalphas = alphas))
+
+plot1 <- FT_alphas %>% ggplot() +
+  geom_line(aes(sampleSize, FTalphas, color = 'Free Throw Percentage', group = 1, text = paste("FT Attempts: ", sampleSize, "<br>Alpha Value: ", round(FTalphas, 3)))) + 
+  theme(legend.position = "none") +
+  labs(title = 'Reliability of FT% for Different Numbers of Attempts', x = 'Number of FT Attempts', y = "Cronbach's Alpha Value")
+
+ggplotly(plot1, tooltip = "text")
+
+```
+
+Indeed, the graph above confirms an upward trend for alpha as we take larger samples. With more attempts, we can feel more confident that a player's FT% represents something close to their true talent. That said, the value for alpha seems to plateau around 150 attempts, suggesting there is an upper limit to how confident we can be in a player's observed FT%. It should also be noted that FT% seems to stabilize quickly. For 25 FT attempts, alpha reaches a value above 0.5, meaning a player's skill represents more than half of the variation in FT%. In other words, it does not take very long for us to learn a lot about how good a player is at shooting FTs.
+
+Alpha is nice to have on its own, but it can also be used to estimate a player's skill level. In the 2018-19 season, UNC Forward Luke Maye attempted 129 FTs and made 99 of them, good for a FT% of 76.7%. Of course, that does not mean Maye was a true talent 76.7% FT shooter that season. As we've seen, his observed FT% was a combination of his true talent for shooting FTs and random variation. How much was skill and how much was luck? I estimated the answer using the alpha value associated with Maye's 129 FT attempts. Taking the value of alpha* for $i$ attempts ($\alpha_i$), the player's FT% for a given season ($playerFTpct$), and the average FT% in our sample ($averageFTpct$), I approximated each player's FT shooting skill according to the formula below:
+$$
+\alpha_i * playerFTpct + (1-\alpha_i) * averageFTpct = FTSkill
+$$
+
+*For players with more than 200 FT attempts, I used the alpha associated with 200 attempts, or 0.853. For players with just 1 FT attempt, I used the alpha associated with 2 attempts, or 0.128.
+
+For Maye, this comes out to 75.7%. With 129 attempts, his observed FT% is probably close to his skill. The tables below compare the top 10 player-seasons by FT% and the top 10 player-seasons by our estimate for FT shooting skill, which I will call rFT% (regressed FT%). The two tables display very different results, with only one player-season (Matt Frierson, 2018-19) appearing on both lists. The best players by rFT% achieved success with more attempts than the best players by FT% alone. Players who shot a high FT% over many attempts were rewarded for demonstrating their talent, while players who had few attempts were heavily regressed toward the sample mean.<br>
+
+```{r, warning= FALSE, message = FALSE}
+
+#add a column for the number of FT attempts by each player season
+#where 1 attempt is coded as 2 and >200 attempts is coded as 200
+playerSeasons$alphaAtt <- 2
+playerSeasons$alphaAtt <- ifelse(playerSeasons$FTs >= 2 & playerSeasons$FTs <= 200, playerSeasons$FTs, playerSeasons$alphaAtt)
+playerSeasons$alphaAtt <- ifelse(playerSeasons$FTs > 200, 200, playerSeasons$alphaAtt)
+
+#add a column for the alpha value corresponding to the number of attempts
+playerSeasons$alph <- unlist(alphas[playerSeasons$alphaAtt - 1])
+
+#calculate avg FT% in the sample
+averageFTpct <- sum(playerSeasons$FTM)/ sum(playerSeasons$FTs)
+
+#calculate rFT% according to the formula
+playerSeasons <- playerSeasons %>% mutate(regressedFTpct1 = averageFTpct*(1-alph) + FTpct*alph)
+
+#the remaining code prints out two tables
+#one for the T10 seasons by FT%
+#the other for the T10 seasons by rFT%
+FTpctTable <- playerSeasons[,c(1,2,7,9)] %>% arrange(desc(FTpct))
+
+RegFTpctTable <- playerSeasons[,c(1,2,7,9,16)] %>% arrange(desc(regressedFTpct1))
+
+FTpctTable$shooter <- stri_trans_totitle(FTpctTable$shooter)
+FTpctTable$FTpct <- scales::percent(FTpctTable$FTpct, accuracy = 0.1)
+
+
+RegFTpctTable$shooter <- stri_trans_totitle(RegFTpctTable$shooter)
+RegFTpctTable$FTpct <- scales::percent(RegFTpctTable$FTpct, accuracy = 0.1)
+RegFTpctTable$regressedFTpct1 <- scales::percent(RegFTpctTable$regressedFTpct1, accuracy = 0.1)
+
+colnames(FTpctTable) <- c('Player', 'Season', 'FT Attempts', 'FT%')
+colnames(RegFTpctTable) <- c('Player', 'Season', 'FT Attempts', 'FT%', 'rFT%')
+
+kable(head(FTpctTable, 10), caption = 'Top 10 Player-Seasons by Observed FT%', booktabs = T, align = 'c') %>%
+  kable_styling(full_width = FALSE, position = "float_left", font_size = 12, bootstrap_options = c("striped", "hover", "condensed"))
+kable(head(RegFTpctTable, 10), caption = 'Top 10 Player-Seasons by rFT%', booktabs = T, align = 'c') %>%
+  kable_styling(full_width = FALSE, position = "left", font_size = 12, bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+
+Still, I wanted to further refine rFT% to get a better estimate of a player's skill. The current estimate regressed a player's FT% to the average FT% in the entire sample. The player population is diverse however, with players playing different positions, in different conferences, and with different levels of experience. Instead of regressing each player's FT% to the sample mean, I wanted to regress their FT% to the mean of *players like them.* To separate players into categories, I focused on three factors which I thought might affect the average FT%: a player's position, conference, and class.
+
+There were 4 different positions present in the sample: G, F, F/C, and C. I calculated the average FT% for each position. Using a [Bonferroni Correction](https://www.statology.org/bonferroni-correction/), I found the differences between each position to be significant at the 5% level (p-value < 0.0083). A need to account for a player's position when estimating their FT shooting skill was supported.
+```{r, warning= FALSE, message = FALSE, out.width="60%", out.height="60%", fig.align = 'center'}
+
+#conduct pairwise test for positions
+test <- pairwise.t.test(playerSeasons$FTpct, playerSeasons$position, p.adjust.method="bonferroni")
+test <- as.data.frame(test$p.value)
+test <- signif(test, digits = 3)
+
+#plot the resulting p values
+test <- test %>% mutate(across(everything(), ~ifelse(.x <= 0.0083,
+        cell_spec(.x, color = "green", bold = T),
+        cell_spec(.x, color = "red", bold = T))))
+
+test %>% 
+ kable(escape = F, caption = 'P-Values for Bonferroni Correction: FT% ~ Position', booktabs = T, align = 'c') %>%
+  kable_styling(full_width = FALSE, font_size = 12, bootstrap_options = c("striped", "condensed"))
+
+#graph the avg FT% by position
+MeanbyPosition <- playerSeasons %>% group_by(position) %>%
+  summarise(`Free Throws Made` = sum(FTM),
+            `Free Throws Attempted` = sum(FTs),
+            `Free Throw Percentage` = sum(FTM)/sum(FTs)) %>%
+  rename(Position = position)
+
+theme_update(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+             legend.position = "none",
+             axis.text = element_text(size=12),
+             axis.title.x = element_text(size = 14, margin = unit(c(5, 0, 0, 0), "mm")),
+             axis.title.y = element_text(size = 14, margin = unit(c(0, 7, 0, 0), "mm")))
+
+MeanbyPosition %>% ggplot(aes(x = reorder(Position, `Free Throw Percentage`), y = `Free Throw Percentage`, fill = `Free Throw Percentage`)) +
+  geom_col() +
+  ggtitle("Average FT% by Position") +
+  xlab("Position") + 
+  geom_text(aes(label=scales::percent(`Free Throw Percentage`, accuracy = 0.1)),vjust=-0.2)+
+  scale_fill_gradient2(name = 'FT%',
+                       low = "blue", 
+                       high = "red", 
+                       midpoint = median((MeanbyPosition %>% arrange(`Free Throw Percentage`))$`Free Throw Percentage`))
+
+```
+
+There were 32 conferences present in the sample, which I split into two categories: power conferences (ACC, Big-12, Big-10, Big-East, Pac-12, and SEC) and non-power conferences (the rest). Using a [one-way Welch's ANOVA test](https://www.statisticshowto.com/welchs-anova/), the difference in FT% by conference was not significant at the 5% level (p = 0.8). A need to account for the player's conference in calculating average FT% was not supported.
+```{r, warning = FALSE, message = FALSE, include = FALSE}
+
+#conduct a Welch test for conference
+bartlett.test(FTpct ~ power, data = playerSeasons)
+oneway.test(FTpct ~ power, data = playerSeasons, var.equal = TRUE)
+
+```
+
+```{r, warning= FALSE, message = FALSE, out.width="60%", out.height="60%", fig.align = 'center'}
+
+#plot the avg FT% by conference
+MeanbyConference <- playerSeasons %>% group_by(power) %>%
+  summarise(`Free Throws Made` = sum(FTM),
+            `Free Throws Attempted` = sum(FTs),
+            `Free Throw Percentage` = sum(FTM)/sum(FTs)) %>%
+  rename(Conference = power)
+
+MeanbyConference %>% ggplot(aes(x = reorder(Conference, `Free Throw Percentage`), y = `Free Throw Percentage`, fill = `Free Throw Percentage`)) +
+  geom_col() +
+  ggtitle("Average FT% by Conference") +
+  xlab("Conference") + 
+  geom_text(aes(label=scales::percent(`Free Throw Percentage`, accuracy = 0.1)),vjust=-0.2)+
+  scale_fill_gradient2(name = 'FT%',
+                       low = "blue", 
+                       high = "red", 
+                       midpoint = median((MeanbyConference %>% arrange(`Free Throw Percentage`))$`Free Throw Percentage`))
+
+```
+
+Finally, there were 4 different classes present in the data: freshman, sophomore, junior, and senior. As with position, I calculated FT% for each class and tested the significance of the differences. A Bonferroni Correction indicated there was a significant difference between all groups at the 5% level (p-value < 0.0083). A need to account for the player's class in calculating average FT% was supported.
+```{r, warning= FALSE, message = FALSE, out.width="60%", out.height="60%", fig.align = 'center'}
+
+#conduct a pairwise test for class
+test <- pairwise.t.test(playerSeasons$FTpct, playerSeasons$class, p.adjust.method="bonferroni")
+test <- as.data.frame(test$p.value)
+test <- signif(test, digits = 3)
+
+#plot the results
+test <- test %>% mutate(across(everything(), ~ifelse(.x <= 0.0083,
+        cell_spec(.x, color = "green", bold = T),
+        cell_spec(.x, color = "red", bold = T))))
+
+test %>% 
+ kable(escape = F, caption = 'P-Values for Bonferroni Correction: FT% ~ Class', booktabs = T, align = 'c') %>%
+  kable_styling(full_width = FALSE, font_size = 12, bootstrap_options = c("striped", "condensed"))
+
+#graph the avg FT% by class
+MeanbyClass <- playerSeasons %>%
+  group_by(class) %>%
+  summarise(`Free Throws Made` = sum(FTM),
+            `Free Throws Attempted` = sum(FTs),
+            `Free Throw Percentage` = sum(FTM)/sum(FTs)) %>%
+  rename(Class = class)
+
+MeanbyClass$Class <- toupper(MeanbyClass$Class)
+
+MeanbyClass %>% ggplot(aes(x = reorder(Class, `Free Throw Percentage`), y = `Free Throw Percentage`, fill = `Free Throw Percentage`)) +
+  geom_col() +
+  ggtitle("Average FT% by Class") +
+  xlab("Class") + 
+  geom_text(aes(label=scales::percent(`Free Throw Percentage`, accuracy = 0.1)),vjust=-0.2)+
+  scale_fill_gradient2(name = 'FT%',
+                       low = "blue", 
+                       high = "red", 
+                       midpoint = median((MeanbyClass %>% arrange(`Free Throw Percentage`))$`Free Throw Percentage`))
+
+```
+
+## Analysis and Conclusions
+
+Based on the data above, I re-calculated rFT% for each player-season, this time regressing the player's observed FT% to the average FT% for their position and class. Below are the top 10 seasons using the new estimate:
+```{r, warning= FALSE, message = FALSE}
+
+#recalculate avg FT% accounting for class and position
+playerAverages <- aggregate(FTpct ~ class + position, data = playerSeasons, mean)
+playerAverages <- playerAverages %>% rename(avgFTpct = FTpct)
+playerSeasons <- playerSeasons %>% left_join(playerAverages, by = c('class', 'position'))
+
+#recalculate rFT% with the new formula
+playerSeasons <- playerSeasons %>% mutate(regressedFTpct2 = avgFTpct*(1-alph) + FTpct*alph)
+
+#the remaining code outputs a table of the T10 seasons by the new rFT%
+RegFTpctTable2 <- playerSeasons[,c(1,2,5:7,9,18)] %>% arrange(desc(regressedFTpct2))
+
+RegFTpctTable2$shooter <- stri_trans_totitle(RegFTpctTable2$shooter)
+RegFTpctTable2$class <- toupper(RegFTpctTable2$class)
+RegFTpctTable2$FTpct <- scales::percent(RegFTpctTable2$FTpct, accuracy = 0.1)
+RegFTpctTable2$regressedFTpct2 <- scales::percent(RegFTpctTable2$regressedFTpct2, accuracy = 0.1)
+
+colnames(RegFTpctTable2) <- c('Player', 'Season', 'Class', 'Position', 'FT Attempts', 'FT%', 'rFT%')
+
+kable(head(RegFTpctTable2, 10), caption = 'Top 10 Player-Seasons by rFT%', booktabs = T, align = 'c') %>%
+  kable_styling(full_width = FALSE, font_size = 12, bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+It should be noted that rFT% is not a prediction. Rather, it tells us how skilled a player *was* in the past. For example, Matt Frierson in the 2018-19 season was a "true talent" 90.1% FT shooter, but any number of factors, such as injury, fatigue, a different shooting motion, etc., could affect whether he shoots 90.1% in the future. That being said, rFT% makes for a better prediction than observed FT% alone. To prove this, I calculated the FT% for each player-season before and after January 1st (a rough halfway point in the season). I also calculated the average FT% in the sample, accounting for position and class, and the rFT% for the pre-New Year's data. Taking all player-seasons with at least 25 FT attempts before and after January 1st, I calculated the root mean squared error (RMSE) between pre-New Year's FT%, average FT%, and rFT% and post-New Year's FT%. If rFT% is a good predictor of future performance, it should be able to predict a player's "second half" performance better than FT% or average FT%. 
+
+```{r, message = FALSE, warning = FALSE, out.width="60%", out.height="60%", fig.align = 'center'}
+
+#make a new data.table that contains the first half and second half FT stats for each player season
+playerSplitHalf <- freethrows %>% group_by(playerCode, adjShooter, season, shot_team) %>%
+  summarise(firstHalfFTs = sum(!is.na(shot_outcome[substr(date, 1, 4) == substr(season, 1, 4)])),
+            firstHalfFTM = sum(shot_outcome[substr(date, 1, 4) == substr(season, 1, 4)] == 'made'),
+            secondHalfFTs = sum(!is.na(shot_outcome[substr(date, 1, 4) != substr(season, 1, 4)])),
+            secondHalfFTM = sum(shot_outcome[substr(date, 1, 4) != substr(season, 1, 4)] == 'made')) %>%
+  mutate(firstHalfFTpct = firstHalfFTM/firstHalfFTs,
+         secondHalfFTpct = secondHalfFTM/secondHalfFTs)
+
+#join with the player seasons data and filter out players with fewer than 25 attempts in either half
+playerSeasons <- playerSeasons %>% left_join(playerSplitHalf, by = c('playerCode', 'season', 'shot_team')) 
+playerPreds <- playerSeasons %>% filter(firstHalfFTs >= 25 & secondHalfFTs >= 25)
+
+#add a column for the alpha value associated with each player season's first half FT attmepts
+playerPreds$alph1H <- unlist(alphas[playerPreds$firstHalfFTs - 1])
+
+#calculate avg FT% (accounting for class and position) for the first half
+playerAverages1H <- aggregate(firstHalfFTpct ~ class + position, data = playerPreds, mean)
+playerAverages1H <- playerAverages1H %>% rename(avgFTpct1H = firstHalfFTpct)
+playerPreds <- playerPreds %>% left_join(playerAverages1H, by = c('class', 'position'))
+
+#calculate rFT% for the first half
+playerPreds <- playerPreds %>% mutate(regressedFTpct1H = avgFTpct1H*(1-alph1H) + firstHalfFTpct*alph1H)
+
+#calculate the three rmse values we want and put them into one table for each plotting
+graphTable <- data.table(Metric = c('First Half FT%', 'First Half Avg. FT%', 'First Half rFT%'),
+           RMSE = c(Metrics::rmse(playerPreds$secondHalfFTpct, playerPreds$firstHalfFTpct),
+Metrics::rmse(playerPreds$secondHalfFTpct, playerPreds$avgFTpct1H),
+Metrics::rmse(playerPreds$secondHalfFTpct, playerPreds$regressedFTpct1H)))
+
+#make a plot showing the rmse values
+graphTable %>% ggplot(aes(x = reorder(Metric, -RMSE), y = RMSE, fill = RMSE)) +
+  geom_col() +
+  ggtitle("Predictive Accuracy by Metric") +
+  xlab("Metric") + 
+  geom_text(aes(label=round(RMSE, 4)),vjust=-0.2) +
+  scale_fill_gradient2(name = 'RMSE',
+                       low = "red", 
+                       high = "blue", 
+                       midpoint = median((graphTable %>% arrange(RMSE))$RMSE))
+
+```
+
+rFT% produced a much lower RMSE than the other two metrics, indicating it is a better predictor of a player's future performance than observed statistics alone. Again, our estimates of a player's "true talent" are not meant to be predictions. Better forecasts could be constructed which take into account the many factors which affect a player's future performance. Rather, by telling us how good a player was in the past, rFT% provides a starting point for us to think about how that player might perform at the FT line in the future.
+
+Additionally, rFT% does not necessarily provide a definitive number for how good a player is at shooting FTs. There is some margin for error involved in estimating a player's "true talent." For instance, if Matt Frierson's rFT% was 90.1% for 2018-19, it is entirely possible his "true" FT% skill was really 89% or 91%. I represented this uncertainty by constructing confidence bands. I calculated an upper and lower bound for a 95% confidence interval according to the following formula*, where $stdev$ referred to the standard deviation in FT% in the dataset (specific to a player's position and class).
+
+$$
+rFTpct \pm 1.96*stdev * \sqrt{1-\alpha}
+$$
+
+*[This study of medical assessments in the UK](https://bmcmededuc.biomedcentral.com/articles/10.1186/1472-6920-10-40 "The standard error of measurement is a more appropriate measure of quality for postgraduate medical assessments than is reliability: an analysis of MRCP(UK) examinations") contains a good explanation of using cronbach's alpha to calculate a standard error of measurement, which can then be used to formulate a confidence interval.
+
+```{r, message = FALSE, warning = FALSE, include = FALSE}
+
+#calculate standard deviation in the sample (accounting for player and class)
+playerSD <- aggregate(FTpct ~ class + position, data = playerSeasons, sd)
+playerSD <- playerSD %>% rename(sdFTpct = FTpct)
+playerSeasons <- playerSeasons %>% left_join(playerSD, by = c('class', 'position'))
+
+#calculate SEM and make the confidence bands (upper/lower bounds)
+playerSeasons <- playerSeasons %>% mutate(sem = sdFTpct*sqrt(1-alph),
+                                          upper = regressedFTpct2 + 1.96*sem,
+                                          lower = regressedFTpct2 - 1.96*sem)
+
+```
+
+```{r, message = FALSE, warning = FALSE, out.width="60%", out.height="60%", fig.align = 'center'}
+
+#get players on the 2021-22 UNC team
+UNC2122 <- playerSeasons %>% filter(team == 'UNC', season == '2021-22')
+
+#plot the confidence bands for the team
+plot2 <- UNC2122 %>% ggplot(aes(x=reorder(stri_trans_totitle(shooter),regressedFTpct2), y=regressedFTpct2, ymin=lower, ymax=upper, text = paste("rFT%: ", scales::percent(regressedFTpct2, accuracy = 0.1)))) + 
+  geom_point(colour = "lightblue") +
+  geom_errorbar(width=.02,
+                linewidth = 1,
+                position=position_dodge(0.05),
+                colour = "lightblue") +
+  xlab("Player") +
+  ylab("rFT%") +
+  scale_y_continuous(labels = scales::percent) +
+  ggtitle("UNC 2021-22 rFT% by Player") +
+  theme_bw() +
+  coord_flip()
+
+ggplotly(plot2, tooltip = "text")
+
+```
+
+Above are all players who attempted a FT for the 2021-22 UNC basketball team. The players with the most FT attempts have the smallest confidence bands, which makes intuitive sense. The more FTs a player attempts, the more confident we should be in our estimate of their FT shooting skill. Still, even for players with many attempts, the confidence bands are fairly wide, emphasizing the challenge in estimating a player's "true talent" for FT shooting. The college basketball season is only about 40 games, limiting the amount of FTs a player can attempt in a given year, and in turn limiting our confidence in their demonstrated skill. 
+
+College basketball games often come down to FT shooting. The ability to knock down foul shots gives a team valuable points in a close game that can make a difference between winning and losing. Having an accurate understanding of players' FT shooting talent can help a team identify the players -- for their own team and the opposing team -- they want at the foul line late in games. Calculating rFT% may not provide a perfect estimate of a player's "true" FT shooting talent, but it helps adjust a player's FT% by their number of attempts, and provides a more accurate picture of how good they are at FT shooting. 
+
+
+
+

@@ -31,10 +31,11 @@ library(stringi)
 #included in a separate file (Free Throw Shooting.R) on github
 #the file being loaded in below is the resulting cleaned dataset
 
-#unfortunately, the combined free throws dataset is too large for github
-#instead, I put the individual game csv files on github
-#again, those files are combined in Free Throw Shooting.R and result in the file being loaded below
-freethrows <- read.fst("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness/All FTs")
+#the individual files that are loaded in while running Free Throw Shooting.R 
+#are located in the Data folder on GitHub
+#however, the files produced by running Free Throw Shooting.R are also located as fst files on Github
+#the dataset containing all free throws in the sample is loaded in below
+freethrows <- read.fst("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness/All_FTs.fst")
 
 ```
 
@@ -58,8 +59,7 @@ To start with, I took all Division I play-by-play data from the last five men's 
 
 #as with the 'freethrows' dataset, the file below is the resulting cleaned dataset
 #from running Free Throw Shooting.R
-#this file is small enough for github, so it is included as a CSV file for reference
-playerSeasons <- read.fst("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness/Player FT Seasons")
+playerSeasons <- read.fst("C:/Users/ljdub/OneDrive/Documents/Sports Research/March Madness/PlayerSeasons.fst")
 
 ```
 
@@ -417,7 +417,3 @@ ggplotly(plot2, tooltip = "text")
 Above are all players who attempted a FT for the 2021-22 UNC basketball team. The players with the most FT attempts have the smallest confidence bands, which makes intuitive sense. The more FTs a player attempts, the more confident we should be in our estimate of their FT shooting skill. Still, even for players with many attempts, the confidence bands are fairly wide, emphasizing the challenge in estimating a player's "true talent" for FT shooting. The college basketball season is only about 40 games, limiting the amount of FTs a player can attempt in a given year, and in turn limiting our confidence in their demonstrated skill. 
 
 College basketball games often come down to FT shooting. The ability to knock down foul shots gives a team valuable points in a close game that can make a difference between winning and losing. Having an accurate understanding of players' FT shooting talent can help a team identify the players -- for their own team and the opposing team -- they want at the foul line late in games. Calculating rFT% may not provide a perfect estimate of a player's "true" FT shooting talent, but it helps adjust a player's FT% by their number of attempts, and provides a more accurate picture of how good they are at FT shooting. 
-
-
-
-
